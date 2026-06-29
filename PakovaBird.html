@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flappy Pakova</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    background:#111;
+    overflow:hidden;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+    font-family:Arial,sans-serif;
+}
+
+#gameCanvas{
+    border:3px solid white;
+}
+
+#menu{
+    position:absolute;
+    z-index:10;
+    text-align:center;
+}
+
+#menu h1{
+    color:white;
+    margin-bottom:20px;
+    font-size:48px;
+}
+
+button{
+    padding:12px 30px;
+    font-size:20px;
+    cursor:pointer;
+}
+
+#hud{
+    position:absolute;
+    top:15px;
+    left:15px;
+    z-index:20;
+    color:white;
+    font-size:22px;
+    display:flex;
+    gap:20px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="menu">
+    <h1>🐦 Flappy Pakova</h1>
+    <button id="playBtn">Jugar</button>
+</div>
+
+<div id="hud">
+    <span id="score">Puntos: 0</span>
+    <span id="record">Record: 0</span>
+</div>
+
+<canvas id="gameCanvas" width="500" height="700"></canvas>
+
+<script>
+
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const menu = document.getElementById("menu");
+const playBtn = document.getElementById("playBtn");
+
+const scoreText = document.getElementById("score");
+const recordText = document.getElementById("record");
+
+const fondo = new Image();
+fondo.src = "assets/fondo.png";
+
+const pato = new Image();
+pato.src = "assets/PakovaDuck.png";
+
+const banana = new Image();
+banana.src = "assets/bananaMoneda.png";
+
+const saltoSound = new Audio("assets/SonidoSalto.mp3");
+const monedaSound = new Audio("assets/moneda.mp3");
+const gameOverSound = new Audio("assets/Gameover.mp3");
+const musica = new Audio("assets/Musicadefondo.mp3");
+
+musica.loop = true;
+
+let bird;
+let pipes;
+let bananas;
+let score;
+let speed;
+let gameOver;
+let frame;
+
+let record =
+localStorage.getItem("pakovaRecord") || 0;
+
+recordText.textContent =
+"Record: " + record;
+
+function resetGame(){
+
+    bird = {
+        x:120,
+        y:350,
+        width:80,
+        height:80,
+        velocity:0
+    };
+
+    pipes = [];
+    bananas = [];
+
+    score = 0;
+    speed = 4;
+    frame = 0;
+    gameOver = false;
+
+    scoreText.textContent =
+    "Puntos: 0";
+}
+
+function jump(){
+
+    if(gameOver) return;
+
+    bird.velocity = -10;
+
+    saltoSound.currentTime = 0;
+    saltoSound.play();
+}
+
+function createPipe(){
+
+    let gap = 260;
+
+    let top =
+    Math.random()*250 + 100;
+
+    pipes.push({
+        x:500,
+        top:top,
+        bottom:top+gap,
+        counted:false
+    });
+
+    bananas.push({
+        x:540,
+        y:top+gap/2-20,
+        collected:false
+    });
+}
+
+function collision(a,b){
+
+    return (
+        a.x < b.x+b.width &&
+        a.x+a.width > b.x &&
+        a.y < b.y+b.height &&
+        a.y+a.height > b.y
+    );
+}
+
+function endGame(){
+
+    if(gameOver) return;
+
+    gameOver = true;
+
+    gameOverSound.play();
+
+    if(score > record){
+
+        record = score;
+
+        localStorage.setItem(
+            "pakovaRecord",
+            record
+        );
+
+        recordText.textContent =
+        "Record: " + record;
+    }
+
+    menu.style.display = "block";
+    playBtn.textContent = "Reiniciar";
+}
+
+function update(){
+
+    if(gameOver) return;
+
+    frame++;
+
+    bird.velocity += 0.6;
+    bird.y += bird.velocity;
+
+    if(frame % 100 === 0){
+        createPipe();
+    }
+
+    for(let i=pipes.length-1;i>=0;i--){
+
+        let p = pipes[i];
+
+        p.x -= speed;
+
+        if(
+            !p.counted &&
+            p.x < bird.x
+        ){
+            p.counted = true;
+
+            score++;
+
+            monedaSound.play();
+
+            scoreText.textContent =
+            "Puntos: " + score;
+
+            speed = Math.min(
+                10,
+                4 + Math.floor(score/10)
+            );
+        }
+
+        let topRect = {
+            x:p.x,
+            y:0,
+            width:80,
+            height:p.top
+        };
+
+        let bottomRect = {
+            x:p.x,
+            y:p.bottom,
+            width:80,
+            height:700
+        };
+
+        if(
+            collision(bird,topRect) ||
+            collision(bird,bottomRect)
+        ){
+            endGame();
+        }
+
+        if(p.x < -100){
+            pipes.splice(i,1);
+        }
+    }
+
+    for(let b of bananas){
+
+        if(b.collected) continue;
+
+        let bananaRect = {
+            x:b.x,
+            y:b.y,
+            width:40,
+            height:40
+        };
+
+        if(collision(bird,bananaRect)){
+
+            b.collected = true;
+
+            score += 5;
+
+            monedaSound.play();
+
+            scoreText.textContent =
+            "Puntos: " + score;
+        }
+
+        b.x -= speed;
+    }
+
+    if(
+        bird.y < 0 ||
+        bird.y + bird.height > 700
+    ){
+        endGame();
+    }
+}
+
+function draw(){
+
+    ctx.clearRect(0,0,500,700);
+
+    ctx.drawImage(
+        fondo,
+        0,
+        0,
+        500,
+        700
+    );
+
+    for(let p of pipes){
+
+        ctx.fillStyle = "#1faa00";
+
+        ctx.fillRect(
+            p.x,
+            0,
+            80,
+            p.top
+        );
+
+        ctx.fillRect(
+            p.x,
+            p.bottom,
+            80,
+            700
+        );
+    }
+
+    for(let b of bananas){
+
+        if(!b.collected){
+
+            ctx.drawImage(
+                banana,
+                b.x,
+                b.y,
+                40,
+                40
+            );
+        }
+    }
+
+    ctx.drawImage(
+        pato,
+        bird.x,
+        bird.y,
+        bird.width,
+        bird.height
+    );
+}
+
+function gameLoop(){
+
+    update();
+    draw();
+
+    requestAnimationFrame(
+        gameLoop
+    );
+}
+
+playBtn.addEventListener(
+    "click",
+    ()=>{
+
+        menu.style.display="none";
+
+        musica.currentTime = 0;
+        musica.play();
+
+        resetGame();
+    }
+);
+
+document.addEventListener(
+    "keydown",
+    e=>{
+        if(e.code==="Space"){
+            jump();
+        }
+    }
+);
+
+canvas.addEventListener(
+    "click",
+    jump
+);
+
+resetGame();
+gameLoop();
+
+</script>
+
+</body>
+</html>
